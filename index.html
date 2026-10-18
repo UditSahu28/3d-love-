@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#100013">
+<title>My 3D Love Heart ❤️</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at center, #360725, #08000e 80%);
+  color: white;
+  font-family: Georgia, serif;
+  text-align: center;
+  overflow: hidden;
+}
+h1 {
+  margin: 22px 5px 4px;
+  color: #ff75c0;
+  font-size: clamp(29px, 7vw, 48px);
+  text-shadow: 0 0 20px #ff168a;
+}
+p { color: #ffd0e8; font-size: 14px; }
+canvas {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  min-height: 330px;
+}
+button {
+  background: #6d1049;
+  border: 1px solid #ff83c3;
+  color: white;
+  border-radius: 25px;
+  padding: 12px 23px;
+  font-size: 15px;
+  box-shadow: 0 0 15px #ff168a;
+  cursor: pointer;
+}
+footer { margin: 18px 5px; color: #ffadd7; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>❤️ I Love You ❤️</h1>
+<p>34 languages • One heart • Forever</p>
+
+<canvas id="heart"></canvas>
+
+<button id="replay">♡ Replay Love ♡</button>
+<footer>Made with love, just for you ✨</footer>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("heart");
+const ctx = canvas.getContext("2d");
+
+const messages = [
+"I Love You", "Te amo", "Je t'aime", "Ti amo",
+"Ich liebe dich", "Eu te amo", "Te quiero",
+"愛してる", "사랑해", "मैं तुमसे प्यार करता हूँ",
+"मैं तुमसे प्यार करती हूँ", "أحبك", "Я тебя люблю",
+"Ik hou van jou", "Kocham cię", "Seni seviyorum",
+"Σ' αγαπώ", "Mahal kita", "Nakupenda",
+"Saya cinta kamu", "Anh yêu em", "Jag älskar dig",
+"Minä rakastan sinua", "Volim te", "Ljubim te",
+"ฉันรักคุณ", "我爱你", "Aloha au iā ʻoe",
+"Mi amas vin", "Ngo oi nei", "Mwen renmen ou",
+"愛してるよ", "אני אוהב אותך", "Love forever"
+];
+
+let W, H, dpr, points = [], stars = [];
+let start = performance.now(), raf = 0;
+let paused = false;
+
+// One shared parametric heart shape for the words and outline.
+function heartPoint(t) {
+  return {
+    x: 16 * Math.pow(Math.sin(t), 3) / 17,
+    y: (
+      13 * Math.cos(t) -
+      5 * Math.cos(2*t) -
+      2 * Math.cos(3*t) -
+      Math.cos(4*t)
+    ) / 17
+  };
+}
+
+const outline = [];
+for (let i = 0; i < 400; i++) {
+  outline.push(heartPoint(i / 400 * Math.PI * 2));
+}
+
+// Point-in-polygon: word positions use the exact outline above.
+function inside(x, y) {
+  let insideShape = false;
+
+  for (let i = 0, j = outline.length - 1;
+       i < outline.length; j = i++) {
+    const a = outline[i], b = outline[j];
+
+    if (((a.y > y) !== (b.y > y)) &&
+        x < (b.x - a.x) * (y - a.y) /
+        (b.y - a.y) + a.x) {
+      insideShape = !insideShape;
+    }
+  }
+
+  return insideShape;
+}
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  W = rect.width;
+  H = rect.height;
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  createPoints();
+}
+
+function createPoints() {
+  points = [];
+  stars = [];
+
+  // Several depth layers create a thick, 3D heart.
+  const layers = 11;
+  const perLayer = 165;
+  const scale = Math.min(W * 0.37, H * 0.31, 180);
+
+  for (let layer = 0; layer < layers; layer++) {
+    const z = (layer / (layers - 1) - 0.5) * 0.42;
+
+    for (let i = 0; i < perLayer; i++) {
+      let x, y, tries = 0;
+
+      do {
+        x = Math.random() * 1.9 - 0.95;
+        y = Math.random() * 1.9 - 0.95;
+        tries++;
+      } while (!inside(x, y) && tries < 100);
+
+      if (tries >= 100) continue;
+
+      points.push({
+        x, y, z,
+        text: messages[Math.floor(Math.random() * messages.length)],
+        size: 8 + Math.random() * 3,
+        hue: 325 + Math.random() * 45,
+        phase: Math.random() * Math.PI * 2,
+        layer
+      });
+    }
+  }
+
+  for (let i = 0; i < 75; i++) {
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: 0.5 + Math.random() * 1.5,
+      phase: Math.random() * 6.28
+    });
+  }
+}
+
+function project(x, y, z, angle, scale, cx, cy) {
+  // Rotate around the vertical axis.
+  const rx = x * Math.cos(angle) + z * Math.sin(angle);
+  const rz = -x * Math.sin(angle) + z * Math.cos(angle);
+
+  // Perspective projection gives the heart depth.
+  const camera = 2.8;
+  const perspective = camera / (camera - rz * 0.65);
+
+  return {
+    x: cx + rx * scale * perspective,
+    y: cy - y * scale * perspective,
+    depth: rz,
+    perspective
+  };
+}
+
+function draw(now) {
+  if (paused) return;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const elapsed = now - start;
+  const angle = Math.sin(elapsed * 0.00065) * 0.75;
+  const pulse = 1 + 0.035 * Math.sin(elapsed * 0.003);
+  const scale = Math.min(W * 0.37, H * 0.31, 180) * pulse;
+  const cx = W / 2;
+  const cy = H * 0.47;
+
+  // Background glow.
+  const glow = ctx.createRadialGradient(
+    cx, cy, 5, cx, cy, scale * 1.8
+  );
+  glow.addColorStop(0, "rgba(255, 15, 120, .20)");
+  glow.addColorStop(1, "rgba(255, 15, 120, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw back layers first, front layers last.
+  for (let layer = 0; layer < 11; layer++) {
+    const z = (layer / 10 - 0.5) * 0.42;
+    const frontness = Math.cos(angle) * z -
+                      Math.sin(angle) * 0.1;
+
+    ctx.beginPath();
+
+    outline.forEach((p, i) => {
+      const q = project(p.x, p.y, z, angle, scale, cx, cy);
+      if (i === 0) ctx.moveTo(q.x, q.y);
+      else ctx.lineTo(q.x, q.y);
+    });
+
+    ctx.closePath();
+    ctx.strokeStyle = `hsla(${326 + layer * 2},100%,${48 + layer * 2}%,.85)`;
+    ctx.lineWidth = layer === 10 ? 2.3 : 1.2;
+    ctx.shadowColor = "#ff168a";
+    ctx.shadowBlur = 9 + Math.max(0, frontness) * 20;
+    ctx.stroke();
+  }
+
+  // Sort points by depth for more natural 3D layering.
+  const ordered = points.slice().sort((a, b) => {
+    const za = -a.x * Math.sin(angle) + a.z * Math.cos(angle);
+    const zb = -b.x * Math.sin(angle) + b.z * Math.cos(angle);
+    return za - zb;
+  });
+
+  for (const p of ordered) {
+    const q = project(p.x, p.y, p.z, angle, scale, cx, cy);
+    const brightness = 65 + 20 *
+      Math.sin(now * 0.002 + p.phase);
+
+    ctx.save();
+    ctx.globalAlpha = 0.65 + 0.35 * (p.layer / 10);
+    ctx.font = `${Math.max(6, p.size * q.perspective)}px Georgia, serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = `hsl(${p.hue},100%,${brightness}%)`;
+    ctx.shadowColor = "#ff248f";
+    ctx.shadowBlur = 7;
+    ctx.fillText(p.text, q.x, q.y);
+    ctx.restore();
+  }
+
+  // Small floating sparkles.
+  for (const s of stars) {
+    ctx.globalAlpha = 0.3 + 0.7 *
+      Math.abs(Math.sin(now * 0.002 + s.phase));
+    ctx.fillStyle = "#ffd8ed";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = 1;
+  raf = requestAnimationFrame(draw);
+}
+
+function restart() {
+  cancelAnimationFrame(raf);
+  paused = false;
+  start = performance.now();
+  createPoints();
+  raf = requestAnimationFrame(draw);
+}
+
+document.getElementById("replay").addEventListener("click", restart);
+window.addEventListener("resize", resize);
+
+resize();
+raf = requestAnimationFrame(draw);
+</script>
+</body>
+</html>
